@@ -2,16 +2,36 @@
  * Genepic Agent — built with OpenAI Agents SDK + Responses API.
  */
 
-import { Agent, tool, run } from '@openai/agents-core'
-import { setDefaultOpenAIKey } from '@openai/agents-openai'
+import OpenAI from 'openai'
+import { Agent, tool, run, Model, ModelProvider } from '@openai/agents-core'
+import { setDefaultOpenAIKey, OpenAIResponsesModel } from '@openai/agents-openai'
 import { z } from 'zod'
 
-// ─── Ensure API key is set ─────────────────────────────────────────────────────
+// ─── OpenAI model provider ─────────────────────────────────────────────────────
 
-function ensureApiKey() {
+function createOpenAIModelProvider(apiKey: string): ModelProvider {
+  const client = new OpenAI({ apiKey })
+
+  return {
+    getModel(modelName?: string): Model {
+      return new OpenAIResponsesModel(client, modelName ?? 'gpt-4o')
+    },
+  }
+}
+
+// ─── Ensure API key + default provider ─────────────────────────────────────────
+
+let providerCache: ModelProvider | null = null
+
+function getProvider(): ModelProvider {
+  if (providerCache) return providerCache
+
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set in .env.local')
+
   setDefaultOpenAIKey(apiKey)
+  providerCache = createOpenAIModelProvider(apiKey)
+  return providerCache
 }
 
 // ─── Tools ─────────────────────────────────────────────────────────────────────
@@ -118,7 +138,9 @@ const calculatePriceTool = tool({
       margin_type: margin_type ?? 'retail',
       suggested_price_usd: suggested,
       price_per_100mg: `$${per_100mg}`,
-      competitor_benchmark: competitor_price_per_unit ? `$${competitor_price_per_unit}` : 'not provided',
+      competitor_benchmark: competitor_price_per_unit
+        ? `$${competitor_price_per_unit}`
+        : 'not provided',
       status: 'calculated ✅',
     }
   },
@@ -149,6 +171,7 @@ Prioritise accuracy. Flag legal uncertainties clearly.`,
 // ─── Run helper ────────────────────────────────────────────────────────────────
 
 export async function runAgent(input: string) {
-  ensureApiKey()
-  return run(genepicAgent, input)
+  const provider = getProvider()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return run(genepicAgent, input, { modelProvider: provider } as any)
 }
