@@ -1,6 +1,6 @@
 /**
  * POST /api/agent
- * Streams agent responses using OpenAI Responses API + Agents SDK.
+ * Works with useCompletion from @ai-sdk/react
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,8 +12,18 @@ export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json()
-    const userMessage = messages?.[messages.length - 1]?.content
+    const body = await req.json()
+
+    // useCompletion sends: { prompt: "..." }
+    // useChat sends: { messages: [{ role: "user", content: "..." }] }
+    let userMessage = ''
+
+    if (body.prompt) {
+      userMessage = body.prompt
+    } else if (body.messages && Array.isArray(body.messages)) {
+      const last = body.messages[body.messages.length - 1]
+      userMessage = typeof last === 'string' ? last : last?.content ?? ''
+    }
 
     if (!userMessage) {
       return NextResponse.json({ error: 'No message provided' }, { status: 400 })
@@ -26,29 +36,27 @@ export async function POST(req: NextRequest) {
 
     setDefaultOpenAIKey(apiKey)
 
+    // Run agent with streaming
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = (await run(genepicAgent, userMessage, { stream: true } as any)) as any
 
     const encoder = new TextEncoder()
-    const eventStream = result.toStream() as ReadableStream<{
-      type: string
-      item?: { type?: string; text?: string; name?: string; output?: string }
-      data?: { type?: string; text?: string }
-    }>
 
     const stream = new ReadableStream({
       async start(controller) {
+        const eventStream = result.toStream() as ReadableStream<{
+          type: string
+          item?: { type?: string; text?: string; name?: string; output?: string }
+          data?: { type?: string; text?: string }
+        }>
+
         const reader = eventStream.getReader()
         try {
           while (true) {
             const { done, value } = await reader.read()
             if (done) break
 
-            const event = value as {
-              type: string
-              item?: { type?: string; text?: string; name?: string; output?: string }
-              data?: { type?: string; text?: string }
-            }
+            const event = value
 
             if (event.type === 'run_item_stream_event') {
               const item = event.item
@@ -95,8 +103,8 @@ export async function POST(req: NextRequest) {
             encoder.encode(`data: ${JSON.stringify({ type: 'finish', finishReason: 'stop' })}\n\n`)
           )
         } finally {
-          controller.close()
           reader.releaseLock()
+          controller.close()
         }
       },
     })
