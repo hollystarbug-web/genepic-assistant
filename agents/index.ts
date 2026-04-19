@@ -2,29 +2,24 @@
  * Genepic Agent — built with OpenAI Agents SDK + Responses API.
  */
 
-import OpenAI from 'openai'
 import { Agent, tool, run } from '@openai/agents-core'
-import { setDefaultOpenAIKey, OpenAIResponsesModel } from '@openai/agents-openai'
+import { setDefaultOpenAIKey } from '@openai/agents-openai'
 import { z } from 'zod'
 
-// ─── OpenAI Client ─────────────────────────────────────────────────────────────
+// ─── Ensure API key is set ─────────────────────────────────────────────────────
 
-function getModel() {
+function ensureApiKey() {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set in .env.local')
-
-  const client = new OpenAI({ apiKey })
   setDefaultOpenAIKey(apiKey)
-
-  // Use the Responses API model
-  return new OpenAIResponsesModel(client, 'gpt-4o')
 }
 
 // ─── Tools ─────────────────────────────────────────────────────────────────────
 
 const searchTool = tool({
   name: 'web_search',
-  description: 'Search the web for current information — competitor prices, scientific research, market data, or any topic requiring up-to-date facts.',
+  description:
+    'Search the web for current information — competitor prices, scientific research, market data, or any topic requiring up-to-date facts.',
   parameters: z.object({
     query: z.string().describe('The search query'),
     num_results: z.number().optional().default(5).describe('Number of results'),
@@ -41,10 +36,15 @@ const searchTool = tool({
 
 const researchPeptideTool = tool({
   name: 'research_peptide',
-  description: 'Research a peptide: mechanism of action, typical research dosages, competitor pricing, legal status, and market positioning.',
+  description:
+    'Research a peptide: mechanism of action, typical research dosages, competitor pricing, legal status, and market positioning.',
   parameters: z.object({
     peptide_name: z.string().describe('Name of the peptide'),
-    angle: z.string().optional().default('all').describe('mechanism | dosage | competitors | legal | all'),
+    angle: z
+      .string()
+      .optional()
+      .default('all')
+      .describe('mechanism | dosage | competitors | legal | all'),
   }),
   execute: async ({ peptide_name, angle }) => {
     return {
@@ -58,9 +58,12 @@ const researchPeptideTool = tool({
 
 const writeContentTool = tool({
   name: 'write_content',
-  description: 'Write website copy, product descriptions, email sequences, or marketing content for Genepic.',
+  description:
+    'Write website copy, product descriptions, email sequences, or marketing content for Genepic.',
   parameters: z.object({
-    content_type: z.string().describe('product_description | homepage_headline | email_sequence | ad_copy | blog_post'),
+    content_type: z.string().describe(
+      'product_description | homepage_headline | email_sequence | ad_copy | blog_post'
+    ),
     product_or_topic: z.string().describe('Product or topic to write about'),
     tone: z.string().optional().default('scientific but accessible'),
     word_count: z.number().optional().default(300),
@@ -79,15 +82,26 @@ const writeContentTool = tool({
 
 const calculatePriceTool = tool({
   name: 'calculate_price',
-  description: 'Calculate retail or wholesale pricing for a peptide based on raw cost and margin benchmarks.',
+  description:
+    'Calculate retail or wholesale pricing for a peptide based on raw cost and margin benchmarks.',
   parameters: z.object({
     peptide: z.string().describe('Peptide name'),
     cost_per_gram: z.number().describe('Cost per gram of raw peptide powder'),
     batch_size_grams: z.number().optional().default(1),
-    margin_type: z.string().optional().default('retail').describe('retail | wholesale'),
+    margin_type: z
+      .string()
+      .optional()
+      .default('retail')
+      .describe('retail | wholesale'),
     competitor_price_per_unit: z.number().optional().describe('Known competitor price for benchmarking'),
   }),
-  execute: async ({ peptide, cost_per_gram, batch_size_grams, margin_type, competitor_price_per_unit }) => {
+  execute: async ({
+    peptide,
+    cost_per_gram,
+    batch_size_grams,
+    margin_type,
+    competitor_price_per_unit,
+  }) => {
     const qty_mg = (batch_size_grams ?? 1) * 1000
     const base_cost = cost_per_gram * (batch_size_grams ?? 1)
     const margins = { retail: 3.5, wholesale: 1.8 }
@@ -128,12 +142,13 @@ You have tools for:
 
 Use the right tool for each query. Be honest when a tool isn't wired — don't fabricate data.
 Prioritise accuracy. Flag legal uncertainties clearly.`,
-  model: getModel(),
+  model: 'gpt-4o',
   tools: [searchTool, researchPeptideTool, writeContentTool, calculatePriceTool],
 })
 
 // ─── Run helper ────────────────────────────────────────────────────────────────
 
 export async function runAgent(input: string) {
+  ensureApiKey()
   return run(genepicAgent, input)
 }

@@ -4,9 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { run } from '@openai/agents-core'
-import { setDefaultOpenAIKey } from '@openai/agents-openai'
-import { genepicAgent } from '@/agents/index'
+import { runAgent } from '@/agents/index'
 
 export const runtime = 'nodejs'
 
@@ -34,11 +32,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'OPENAI_API_KEY is not configured' }, { status: 500 })
     }
 
-    setDefaultOpenAIKey(apiKey)
-
     // Run agent with streaming
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = (await run(genepicAgent, userMessage, { stream: true } as any)) as any
+    const result = (await runAgent(userMessage)) as any
 
     const encoder = new TextEncoder()
 
