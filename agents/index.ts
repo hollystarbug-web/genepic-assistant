@@ -3,7 +3,7 @@
  */
 
 import OpenAI from 'openai'
-import { Agent, tool, run, Model, ModelProvider } from '@openai/agents-core'
+import { Agent, tool, run, Model, ModelProvider, setDefaultModelProvider } from '@openai/agents-core'
 import { setDefaultOpenAIKey, OpenAIResponsesModel } from '@openai/agents-openai'
 import { z } from 'zod'
 
@@ -23,7 +23,7 @@ function createOpenAIModelProvider(apiKey: string): ModelProvider {
 
 let providerCache: ModelProvider | null = null
 
-function getProvider(): ModelProvider {
+function ensureProvider(): ModelProvider {
   if (providerCache) return providerCache
 
   const apiKey = process.env.OPENAI_API_KEY
@@ -31,6 +31,7 @@ function getProvider(): ModelProvider {
 
   setDefaultOpenAIKey(apiKey)
   providerCache = createOpenAIModelProvider(apiKey)
+  setDefaultModelProvider(providerCache)
   return providerCache
 }
 
@@ -171,7 +172,7 @@ Prioritise accuracy. Flag legal uncertainties clearly.`,
 // ─── Run helper ────────────────────────────────────────────────────────────────
 
 export async function runAgent(input: string) {
-  const provider = getProvider()
+  ensureProvider()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return run(genepicAgent, input, { modelProvider: provider } as any)
+  return run(genepicAgent, input) as any
 }
